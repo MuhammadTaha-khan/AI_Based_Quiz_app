@@ -13,10 +13,11 @@ from email.mime.text      import MIMEText
 from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
 try:
-    from openai import OpenAI as _OpenAI   # openai >= 1.0
-    _openai_available = True
+    from google import genai as _genai   # google-genai
+    from google.genai import types as _genai_types
+    _gemini_available = True
 except ImportError:
-    _openai_available = False
+    _gemini_available = False
 
 load_dotenv()
 
@@ -31,19 +32,22 @@ GMAIL_USER     = os.environ.get("GMAIL_USER", "")
 GMAIL_APP_PASS = os.environ.get("GMAIL_APP_PASS", "")
 
 # ══════════════════════════════════════════════════════════
-#  ⚙️  OPENAI CONFIG — for AI question generation
+#  ⚙️  GEMINI CONFIG — for AI question generation (free tier)
 # ══════════════════════════════════════════════════════════
 #
-#  HOW TO GET AN OPENAI API KEY:
-#  1. Go to https://platform.openai.com/api-keys
-#  2. Click "Create new secret key"
-#  3. Copy the key (starts with sk-...)
-#  4. Put it in .env as OPENAI_API_KEY=sk-...
+#  HOW TO GET A GEMINI API KEY (free):
+#  1. Go to https://aistudio.google.com/apikey
+#  2. Click "Create API key"
+#  3. Copy the key
+#  4. Put it in .env as GEMINI_API_KEY=...
 #
-#  NOTE: Requires the openai package:
-#        pip install openai
+#  NOTE: Requires the google-generativeai package:
+#        pip install google-generativeai
 #
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "sk-your-openai-key-here")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "your-gemini-key-here")
+_gemini_client = None
+if _gemini_available and not GEMINI_API_KEY.startswith("your-gemini"):
+    _gemini_client = _genai.Client(api_key=GEMINI_API_KEY)
 # ══════════════════════════════════════════════════════════
 
 # ── DATABASE ──────────────────────────────────────────────
@@ -613,13 +617,11 @@ def generate_questions():
     if not topic: conn.close(); return jsonify({"error":"Topic not found"}), 404
     topic_name = topic["name"]
 
-    # ── Try real OpenAI generation first ──────────────────
+    # ── Try real Gemini generation first ──────────────────
     generated = []
 
-    if _openai_available and not OPENAI_API_KEY.startswith("sk-your"):
+    if _gemini_available and not GEMINI_API_KEY.startswith("your-gemini"):
         try:
-            client = _OpenAI(api_key=OPENAI_API_KEY)
-
             prompt = f"""Generate exactly {count} multiple-choice quiz questions about "{topic_name}".
 Difficulty level: {difficulty}.
 
@@ -644,17 +646,17 @@ Rules:
 - Match difficulty: easy=basic facts, medium=applied knowledge, hard=deep understanding
 - Do NOT include any explanation, only the JSON array"""
 
-            response = client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": "You are an expert quiz question creator. Return only valid JSON arrays."},
-                    {"role": "user",   "content": prompt}
-                ],
-                temperature=0.8,
-                max_tokens=2000
+            response = _gemini_client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=prompt,
+                config=_genai_types.GenerateContentConfig(
+                    system_instruction="You are an expert quiz question creator. Return only valid JSON arrays.",
+                    temperature=0.8,
+                    max_output_tokens=2000
+                )
             )
 
-            raw  = response.choices[0].message.content.strip()
+            raw = response.text.strip()
             # Strip markdown code blocks if present
             if raw.startswith("```"):
                 raw = re.sub(r"^```[a-z]*\n?", "", raw)
@@ -677,18 +679,18 @@ Rules:
                     "ai_generated": 1, "approved": 0, "created_by": int(uid)
                 })
 
-            print(f"✅ OpenAI generated {len(generated)} questions for '{topic_name}'")
+            print(f"✅ Gemini generated {len(generated)} questions for '{topic_name}'")
 
         except json.JSONDecodeError as e:
-            print(f"⚠️ OpenAI returned invalid JSON: {e}. Falling back to templates.")
+            print(f"⚠️ Gemini returned invalid JSON: {e}. Falling back to templates.")
             generated = []
         except Exception as e:
-            print(f"⚠️ OpenAI error: {e}. Falling back to templates.")
+            print(f"⚠️ Gemini error: {e}. Falling back to templates.")
             generated = []
 
-    # ── Fallback: built-in templates (used when OpenAI key not set) ──
+    # ── Fallback: built-in templates (used when Gemini key not set) ──
     if not generated:
-        print("ℹ️  Using template generation (set OPENAI_API_KEY for real AI)")
+        print("ℹ️  Using template generation (set GEMINI_API_KEY for real AI)")
         templates = {
             "Computer Science": [
                 {"q":"What does OOP stand for?","options":["Object Oriented Programming","Open Operational Process","Output Optimization Protocol","Object Operation Pattern"],"answer":"Object Oriented Programming"},
@@ -1181,11 +1183,9 @@ def practice_generate():
 
     questions = []
 
-    # ── Try OpenAI first ──────────────────────────────────
-    if _openai_available and not OPENAI_API_KEY.startswith("sk-your"):
+    # ── Try Gemini first ───────────────────────────────────
+    if _gemini_available and not GEMINI_API_KEY.startswith("your-gemini"):
         try:
-            client = _OpenAI(api_key=OPENAI_API_KEY)
-
             prompt = f"""Generate exactly {count} multiple-choice practice questions about "{topic_name}".
 Difficulty: {difficulty} (easy=basic facts, medium=applied knowledge, hard=deep understanding).
 
@@ -1199,17 +1199,17 @@ Rules:
 - Only one option is correct
 - No explanations, only the JSON array"""
 
-            response = client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": "You are an expert quiz creator. Return only valid JSON arrays, no markdown."},
-                    {"role": "user",   "content": prompt}
-                ],
-                temperature=0.85,
-                max_tokens=3000
+            response = _gemini_client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=prompt,
+                config=_genai_types.GenerateContentConfig(
+                    system_instruction="You are an expert quiz creator. Return only valid JSON arrays, no markdown.",
+                    temperature=0.85,
+                    max_output_tokens=3000
+                )
             )
 
-            raw = response.choices[0].message.content.strip()
+            raw = response.text.strip()
             if raw.startswith("```"):
                 raw = re.sub(r"^```[a-z]*\n?", "", raw)
                 raw = re.sub(r"\n?```$", "", raw).strip()
@@ -1228,15 +1228,15 @@ Rules:
                     "difficulty": difficulty,
                     "topic":    topic_name
                 })
-            print(f"✅ OpenAI generated {len(questions)} practice questions for '{topic_name}'")
+            print(f"✅ Gemini generated {len(questions)} practice questions for '{topic_name}'")
 
         except Exception as e:
-            print(f"⚠️ OpenAI error: {e}. Using fallback templates.")
+            print(f"⚠️ Gemini error: {e}. Using fallback templates.")
             questions = []
 
     # ── Fallback: use approved questions from DB ──────────
     if not questions:
-        print("ℹ️  OpenAI unavailable — serving practice from DB questions")
+        print("ℹ️  Gemini unavailable — serving practice from DB questions")
         conn = get_db()
         rows = conn.execute("""
             SELECT q.id, q.question, q.option_a, q.option_b, q.option_c, q.option_d,
@@ -1281,7 +1281,7 @@ Rules:
         "difficulty": difficulty,
         "count":      len(questions),
         "questions":  questions,
-        "ai_generated": _openai_available and not OPENAI_API_KEY.startswith("sk-your")
+        "ai_generated": _gemini_available and not GEMINI_API_KEY.startswith("your-gemini")
     })
 
 
