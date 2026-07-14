@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+backend/venv/
+backend/.env
+backend/quiz.db
+
+# Node / React
+frontend/node_modules/
+frontend/build/
+
+# Editor / OS
+.vscode/
+.DS_Store
