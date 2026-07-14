@@ -647,7 +647,7 @@ Rules:
 - Do NOT include any explanation, only the JSON array"""
 
             response = _gemini_client.models.generate_content(
-                model="gemini-2.0-flash",
+                model="gemini-flash-lite-latest",
                 contents=prompt,
                 config=_genai_types.GenerateContentConfig(
                     system_instruction="You are an expert quiz question creator. Return only valid JSON arrays.",
@@ -1200,7 +1200,7 @@ Rules:
 - No explanations, only the JSON array"""
 
             response = _gemini_client.models.generate_content(
-                model="gemini-2.0-flash",
+                model="gemini-flash-lite-latest",
                 contents=prompt,
                 config=_genai_types.GenerateContentConfig(
                     system_instruction="You are an expert quiz creator. Return only valid JSON arrays, no markdown.",
