@@ -23,7 +23,10 @@ load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
-DB_FILE = "quiz.db"
+
+DB_DIR  = os.environ.get("DB_DIR", ".")
+os.makedirs(DB_DIR, exist_ok=True)
+DB_FILE = os.path.join(DB_DIR, "quiz.db")
 
 # ══════════════════════════════════════════════════════════
 #  ⚙️  GMAIL CONFIG — set GMAIL_USER / GMAIL_APP_PASS in .env
