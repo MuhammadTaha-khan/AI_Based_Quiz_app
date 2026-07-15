@@ -110,5 +110,13 @@ All endpoints are under `/api`. Role is passed via `X-User-Role` / `X-User-Id` h
 
 ## Deployment
 
-- **Backend**: deployed on [Render](https://render.com) as a Python web service (`gunicorn app:app`), with `GMAIL_USER`, `GMAIL_APP_PASS`, `GEMINI_API_KEY` set as environment variables there. Note: Render's free tier has no persistent disk, so `quiz.db` resets on every redeploy/restart — fine for testing, not for production data.
-- **Frontend**: built with `npm run build` and served as static files (e.g. from a Hostinger subdomain), with the API base URL pointed at the live backend instead of `localhost:5000`.
+Deployed via [Coolify](https://coolify.io) on a self-hosted server, using Docker.
+
+- `backend/Dockerfile` — Python image running `gunicorn app:app`. `quiz.db` lives at `DB_DIR` (defaults to `/app/data` in the container) so it survives redeploys via a persistent volume, instead of resetting every deploy.
+- `frontend/Dockerfile` — multi-stage build: compiles the React app with Node, then serves the static `build/` output via nginx (`frontend/nginx.conf`).
+- `docker-compose.yml` (repo root) — defines both services. In Coolify, deploy this repo as a **Docker Compose** resource.
+
+**Required setup in Coolify:**
+1. Deploy the `backend` service first, and set `GMAIL_USER`, `GMAIL_APP_PASS`, `GEMINI_API_KEY` as environment variables on it (same values as your local `backend/.env`).
+2. Once the backend has a public URL/domain, set `REACT_APP_API_URL` (e.g. `https://your-backend-domain/api`) as a **build-time** variable for the `frontend` service — the frontend bakes this into the JS bundle at build time (Create React App env vars aren't readable at runtime), so it must be set *before* building, and the frontend must be rebuilt any time this value changes.
+3. Assign a domain to each service and redeploy.
