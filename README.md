@@ -86,7 +86,7 @@ npm install
 npm start
 ```
 
-Frontend runs at `http://localhost:3000`. Each page currently points its API calls at `http://localhost:5000/api` — update this if your backend runs elsewhere (e.g. after deployment).
+Frontend runs at `http://localhost:3000`. The API base URL comes from `frontend/src/config.js`, which reads `REACT_APP_API_URL` (defaults to `http://localhost:5000/api` for local dev).
 
 ### Environment variables (`backend/.env`)
 
@@ -114,9 +114,11 @@ Deployed via [Coolify](https://coolify.io) on a self-hosted server, using Docker
 
 - `backend/Dockerfile` — Python image running `gunicorn app:app`. `quiz.db` lives at `DB_DIR` (defaults to `/app/data` in the container) so it survives redeploys via a persistent volume, instead of resetting every deploy.
 - `frontend/Dockerfile` — multi-stage build: compiles the React app with Node, then serves the static `build/` output via nginx (`frontend/nginx.conf`).
-- `docker-compose.yml` (repo root) — defines both services. In Coolify, deploy this repo as a **Docker Compose** resource.
+- `docker-compose.yml` (repo root) — defines both services. In Coolify, deploy this repo as a **Docker Compose** resource. Both services use `expose` (not `ports`) so Coolify's own reverse proxy routes to them over its internal network, instead of publishing to host ports directly — important on a shared host running multiple Coolify resources.
+- `backend/.env` is gitignored and never committed — for Coolify, set `GMAIL_USER`, `GMAIL_APP_PASS`, `GEMINI_API_KEY` in the resource's **Environment Variables** panel instead; Coolify injects them into the running container itself.
 
 **Required setup in Coolify:**
-1. Deploy the `backend` service first, and set `GMAIL_USER`, `GMAIL_APP_PASS`, `GEMINI_API_KEY` as environment variables on it (same values as your local `backend/.env`).
-2. Once the backend has a public URL/domain, set `REACT_APP_API_URL` (e.g. `https://your-backend-domain/api`) as a **build-time** variable for the `frontend` service — the frontend bakes this into the JS bundle at build time (Create React App env vars aren't readable at runtime), so it must be set *before* building, and the frontend must be rebuilt any time this value changes.
-3. Assign a domain to each service and redeploy.
+1. Set `GMAIL_USER`, `GMAIL_APP_PASS`, `GEMINI_API_KEY` in the resource's Environment Variables panel (shared across both services), and deploy.
+2. Each service (`backend`, `frontend`) gets its own domain/FQDN in Coolify — confirm both are set. Note the **backend's** domain specifically.
+3. Set `REACT_APP_API_URL=http://<backend-domain>/api` in the same Environment Variables panel — **must point at the backend's domain, not the frontend's** (easy mix-up since Coolify auto-suggests both `SERVICE_FQDN_BACKEND` and `SERVICE_FQDN_FRONTEND`). This is a build-time value: Create React App bakes it into the JS bundle at build time, not read at container runtime, so the frontend must be rebuilt any time this value changes.
+4. Redeploy.
