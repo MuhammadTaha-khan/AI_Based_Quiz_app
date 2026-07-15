@@ -1511,8 +1511,9 @@ def admin_activity():
     return jsonify({"activity": [dict(r) for r in rows]})
 
 
+init_db()
+seed_questions()
+
 if __name__ == "__main__":
-    init_db()
-    seed_questions()
     print("✅ Backend v6 running on http://localhost:5000")
     app.run(debug=True, port=5000)
